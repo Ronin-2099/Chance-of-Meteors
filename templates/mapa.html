@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width,initial-scale=1" />
@@ -20,7 +20,6 @@
             color: #e0e0e0;
             margin-top: 20px;
         }
-        /* Contenedor principal para toda la aplicación */
         .main-container {
             width: 90%;
             max-width: 1000px;
@@ -30,7 +29,6 @@
             border-radius: 8px;
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
         }
-        /* Estilo del mapa */
         #map {
             height: 500px;
             width: 100%;
@@ -38,7 +36,6 @@
             box-shadow: 0 2px 5px rgba(0,0,0,0.2);
             margin-bottom: 20px;
         }
-        /* Estilos para los controles */
         .controls {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -69,7 +66,7 @@
             background-color: #0056b3;
         }
         .wide {
-            grid-column: 1 / -1; /* Ocupa todo el ancho */
+            grid-column: 1 / -1;
         }
         .hint {
             font-size: 0.85rem;
@@ -77,7 +74,6 @@
             margin-top: 6px;
             text-align: center;
         }
-        /* Estilos para la sección de resultados */
         .results {
             margin-top: 20px;
             padding: 15px;
@@ -96,7 +92,11 @@
         .results li {
             padding: 4px 0;
         }
-        /* Estilo para el enlace de regreso */
+        .results hr {
+            border: 0;
+            border-top: 1px solid #4a4a6a;
+            margin: 8px 0;
+        }
         .back-link {
             display: block;
             text-align: center;
@@ -140,7 +140,7 @@
                 <input id="p_surface" type="number" step="any" value="1500" />
             </div>
             <div class="wide">
-                <label for="terrain">Terrain ( Choice affects the "k" constant):</label>
+                <label for="terrain">Terrain (Choice affects the crater "k" constant):</label>
                 <select id="terrain">
                     <option value="rock">Rock</option>
                     <option value="sand" selected>Sand</option>
@@ -154,56 +154,75 @@
             </div>
             <div class="wide">
                 <button id="compute">Calculate and Draw Impact</button>
-                <div class="hint">Click on the map to visualize impact.</div>
+                <div class="hint">Click on the map to set the impact location.</div>
             </div>
         </div>
 
         <div class="results" id="results">
             <strong>Results:</strong>
-            <div id="out">Results haven´t yet been calculated.</div>
+            <div id="out">Results haven't been calculated yet.</div>
         </div>
     </div>
     
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
     <script>
-        // --- Lógica de la calculadora (sin cambios) ---
+        // --- Impact Calculation Logic (MODIFIED) ---
         function computeImpact(params) {
             const d = Number(params.d);
             const v = Number(params.v);
             const p_crater = Number(params.p_crater);
             const p_surface = Number(params.p_surface);
             if (!d || !v || !p_crater || !p_surface) {
-                return { error: "Todos los parámetros numéricos deben ser mayores que 0." };
+                return { error: "All numerical parameters must be greater than 0." };
             }
             const m = (4/3) * Math.PI * Math.pow(d/2, 3) * p_crater;
-            const E = 0.5 * m * Math.pow(v, 2);
+            const E = 0.5 * m * Math.pow(v, 2); // Total kinetic energy in Joules
+            
             let k = 0.3;
             const terrain = (params.terrain || "sand").toLowerCase();
             if (terrain === 'rock') k = 0.22;
             else if (terrain === 'sand') k = 0.3;
             else if (terrain === 'ice') k = 0.5;
             else if (terrain === 'water') k = 0.6;
+            
             const R = k * Math.pow(p_crater / p_surface, 1/3) * Math.pow(d, 0.78) * Math.pow(v, 0.44);
             const D_km = (2 * R) / 1000;
-            return { d, v, p_crater, p_surface, terrain, k, mass_kg: m, energy_j: E, radius_m: R, diameter_km: D_km };
+
+            // --- NEW: SEISMIC LOAD CALCULATION ---
+            // Seismic coupling factor (k_seismic): fraction of energy converted to a quake. This is an estimate (e.g., 10^-4).
+            const k_seismic = 1e-4; 
+            const Es = k_seismic * E; // Seismic energy in Joules
+            
+            // Formula to convert seismic energy (in Joules) to Moment Magnitude (Mw)
+            const Mw = (2/3) * (Math.log10(Es) - 4.8);
+
+            // Return the new values along with the old ones
+            return { d, v, p_crater, p_surface, terrain, k, mass_kg: m, energy_j: E, radius_m: R, diameter_km: D_km, seismic_energy_j: Es, magnitude_mw: Mw };
         }
 
-        // --- Lógica del mapa y eventos ---
+        // --- NEW: FUNCTION TO DESCRIBE THE SHAKING ---
+        function getShakeDescription(mw) {
+            if (mw < 4.0) return 'Minor tremor, similar to the vibration of a passing heavy truck.';
+            if (mw < 5.0) return 'Light shaking, felt by most people in the nearby area.';
+            if (mw < 6.0) return 'Moderate shaking, may cause minor damage to weak structures.';
+            if (mw < 7.0) return 'Strong shaking, considerable damage over a wide area.';
+            if (mw < 8.0) return 'Major earthquake, serious and widespread damage.';
+            return 'Catastrophic earthquake, near-total destruction in the impact zone.';
+        }
+
+        // --- Map and Event Logic ---
         document.addEventListener('DOMContentLoaded', () => {
-            // === CÓDIGO NUEVO PARA LEER PARÁMETROS DE LA URL ===
             const urlParams = new URLSearchParams(window.location.search);
             const diameterParam = urlParams.get('diameter');
             const velocityParam = urlParams.get('velocity');
 
             if (diameterParam) {
-                // Redondeamos a 2 decimales para que se vea limpio
                 document.getElementById('diameter').value = parseFloat(diameterParam).toFixed(2);
             }
             if (velocityParam) {
                 document.getElementById('velocity').value = parseFloat(velocityParam).toFixed(2);
             }
-            // === FIN DEL CÓDIGO NUEVO ===
 
             const defaultCenter = [25.6866, -100.3161];
             const map = L.map('map').setView(defaultCenter, 10);
@@ -245,7 +264,7 @@
 
                 const coordsParts = coordsText.split(',').map(s => s.trim()).filter(Boolean);
                 if (coordsParts.length !== 2 || isNaN(Number(coordsParts[0])) || isNaN(Number(coordsParts[1]))) {
-                    alert('Introduce coordenadas válidas en formato "lat,lng" o haz clic en el mapa.');
+                    alert('Please enter valid coordinates in "lat,lng" format or click on the map.');
                     return;
                 }
                 const lat = Number(coordsParts[0]);
@@ -259,22 +278,31 @@
                     return;
                 }
 
+                // --- MODIFIED: DISPLAY SEISMIC RESULTS ---
                 const massStr = result.mass_kg.toExponential(3) + ' kg';
                 const energyStr = result.energy_j.toExponential(3) + ' J';
                 const diameterStr = result.diameter_km.toFixed(3) + ' km';
                 const radiusStr_m = result.radius_m.toFixed(1) + ' m';
+                
+                // New variables for seismic results
+                const magnitudeStr = result.magnitude_mw.toFixed(2) + ' Mw';
+                const shakeDescription = getShakeDescription(result.magnitude_mw);
 
                 out.innerHTML = `
                     <ul>
-                        <li><strong>Damage radius (R):</strong> ${radiusStr_m}</li>
-                        <li><strong>Approx. damage diameter:</strong> ${diameterStr}</li>
-                        <li><strong>Kinetic energy:</strong> ${energyStr}</li>
-                        <li><strong>Estimated mass:</strong> ${massStr}</li>
+                        <li><strong>Damage Radius (R):</strong> ${radiusStr_m}</li>
+                        <li><strong>Approx. Damage Diameter:</strong> ${diameterStr}</li>
+                        <hr>
+                        <li><strong>Equiv. Seismic Magnitude:</strong> ${magnitudeStr}</li>
+                        <li><strong>Expected Effect:</strong> ${shakeDescription}</li>
+                        <hr>
+                        <li><strong>Kinetic Energy:</strong> ${energyStr}</li>
+                        <li><strong>Estimated Mass:</strong> ${massStr}</li>
                     </ul>`;
 
                 const latlng = [lat, lng];
                 setImpactMarker(latlng);
-                const popup = `<strong>Impact</strong><br/>Diameter of damage: ${diameterStr}<br/>Radius: ${radiusStr_m}`;
+                const popup = `<strong>Impact</strong><br/>Damage Diameter: ${diameterStr}<br/>Radius: ${radiusStr_m}<br/>Equiv. Magnitude: ${magnitudeStr}`;
                 drawImpactCircle(latlng, result.radius_m, popup);
             });
 

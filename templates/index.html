@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Chance of Meteors</title>
+<title>Asteroid Explorer</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}"/>
 
 <style>
@@ -102,14 +102,14 @@
 
     <h4>Parameters for Orbit Calculation 🪐</h4>
     <ul>
-        <li><b>Semi-Major Axis (a):</b> {{ asteroid_data.semi_major_axis }} AU (defines orbit size)</li>
-        <li><b>Eccentricity (e):</b> {{ asteroid_data.eccentricity }} (defines orbit shape)</li>
-        <li><b>Inclination (i):</b> {{ asteroid_data.inclination }}° (defines orbit tilt)</li>
-        <li><b>Ascending Node Longitude (Ω):</b> {{ asteroid_data.ascending_node_longitude }}° (defines orbit orientation)</li>
-        <li><b>Argument of Perihelion (ω):</b> {{ asteroid_data.perihelion_argument }}° (defines ellipse rotation)</li>
-        <li><b>Mean Anomaly (M):</b> {{ asteroid_data.mean_anomaly }}° (defines position at a specific time)</li>
+        <li><b>Semi-Major Axis (a):</b> {{ asteroid_data.semi_major_axis }} AU</li>
+        <li><b>Eccentricity (e):</b> {{ asteroid_data.eccentricity }}</li>
+        <li><b>Inclination (i):</b> {{ asteroid_data.inclination }}°</li>
+        <li><b>Ascending Node Longitude (Ω):</b> {{ asteroid_data.ascending_node_longitude }}°</li>
+        <li><b>Argument of Perihelion (ω):</b> {{ asteroid_data.perihelion_argument }}°</li>
+        <li><b>Mean Anomaly (M):</b> {{ asteroid_data.mean_anomaly }}°</li>
         <hr style="border-color: #4a4a6a; margin: 10px 0;">
-        <li><b>Orbital Period:</b> {{ asteroid_data.orbital_period }} days (time to orbit the Sun)</li>
+        <li><b>Orbital Period:</b> {{ asteroid_data.orbital_period }} days</li>
         <li><b>Perihelion:</b> {{ asteroid_data.perihelion_distance }} AU (closest to Sun)</li>
         <li><b>Aphelion:</b> {{ asteroid_data.aphelion_distance }} AU (farthest from Sun)</li>
     </ul>
@@ -122,6 +122,16 @@
         <li><b>Miss Distance (minimum):</b> {{ "%.2f"|format(asteroid_data.close_approach.miss_distance_km) }} km</li>
     </ul>
     <hr>
+    
+    {% if deflection_data %}
+    <h4>Planetary Defense Mission Parameters 🛡️</h4>
+    <ul>
+        <li><b>Required Velocity Change (Δv):</b> {{ "%.4f"|format(deflection_data.required_dv_ms) }} m/s</li>
+        <li><b>Mission Goal:</b> Increase perihelion to >{{ deflection_data.target_perihelion_au }} AU.</li>
+        <li><b>Most Efficient Maneuver Point:</b> At the orbit's aphelion (farthest point from the Sun).</li>
+    </ul>
+    <hr>
+    {% endif %}
     
     <div class="action-buttons">
         <a href="{{ url_for('mapa', 

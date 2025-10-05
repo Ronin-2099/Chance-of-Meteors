@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -42,17 +42,23 @@
         <h4>{{ asteroid.name }}</h4>
         <ul>
             <li><b>Dangerous:</b> {{ 'Yes ⚠️' if asteroid.hazardous else 'No ✅' }}</li>
-            <li><b>Semi-major axis (a):</b> {{ asteroid.sma }} AU</li>
-            <li><b>Eccentricity (e):</b> {{ asteroid.ecc }}</li>
-            <li><b>Inclination (i):</b> {{ asteroid.inc }}°</li>
-            <li><b>Ascending Node Longitude. (Ω):</b> {{ asteroid.raan }}°</li>
-            <li><b>Arg. of Perihelion (ω):</b> {{ asteroid.omega }}°</li>
-            <li><b>Average Anomaly (M):</b> {{ asteroid.m }}°</li>
+            <li><b>Semi-Major Axis (a):</b> {{ asteroid.elements.a }} AU</li>
+            <li><b>Eccentricity (e):</b> {{ asteroid.elements.e }}</li>
+            <li><b>Inclination (i):</b> {{ asteroid.elements.i }}°</li>
         </ul>
+
+        {% if deflection_data %}
+        <h4 style="margin-top:10px; color:#00cyan;">🛡️ Planetary Defense Mission</h4>
+        <ul>
+            <li><b>Required Δv:</b> {{ "%.4f"|format(deflection_data.required_dv_ms) }} m/s</li>
+            <li><b>New Orbit (Cyan):</b> Safe</li>
+            <li><b>Maneuver Point:</b> ✨</li>
+        </ul>
+        {% endif %}
     </div>
 
     <div id="info">
-        <p id="live-info">Current distance: <span id="live-distance">--</span></p>
+        <p id="live-info">Current Distance: <span id="live-distance">--</span></p>
     </div>
 
     <div id="controls">
@@ -67,44 +73,30 @@
     <a href="/" class="back-button">← Back to Search</a>
 </div>
 
-<script type="importmap">
-{
-    "imports": {
-        "three": "https://unpkg.com/three@0.156.0/build/three.module.js",
-        "three/addons/": "https://unpkg.com/three@0.156.0/examples/jsm/"
-    }
-}
-</script>
+<script type="importmap">{ "imports": { "three": "https://unpkg.com/three@0.156.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.156.0/examples/jsm/" }}</script>
 
 <script type="module">
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-// --- DATOS DEL ASTEROIDE (INYECTADOS POR FLASK) ---
-const asteroidData = {
-    nombre: "{{ asteroid.name }}",
-    peligroso: {{ 'true' if asteroid.hazardous else 'false' }},
-    elements: {
-        a: parseFloat("{{ asteroid.sma }}"),
-        e: parseFloat("{{ asteroid.ecc }}"),
-        i: parseFloat("{{ asteroid.inc }}"),
-        raan: parseFloat("{{ asteroid.raan }}"),
-        omega: parseFloat("{{ asteroid.omega }}"),
-        M: parseFloat("{{ asteroid.m }}")
-    }
-};
+// --- DATA INJECTED BY FLASK ---
+const asteroidData = {{ asteroid|tojson }};
+const deflectionData = {{ deflection_data|tojson }}; // Can be null
 
-// --- CONSTANTES Y ESTADO ---
+// --- CONSTANTS AND STATE ---
 const KM_PER_AU = 149597870.7;
 const LUNAR_DISTANCE_KM = 384400;
 const SCENE_SCALE_AU = 15;
 
 let scene, camera, renderer, controls, textureLoader;
 let sun, earth, asteroid, astOrbitLine, earthOrbitLine, proximityLine;
+// --- NEW 3D OBJECTS ---
+let safeOrbitLine, deflectionPointMarker;
+
 let currentAsteroid = null;
 const liveDistanceEl = document.getElementById('live-distance');
 let astOrbitLabel, astNameLabel;
-let asteroidTexture;
+let asteroidTexture, starTexture;
 
 let simulationTime = 0;
 let isPaused = false;
@@ -117,7 +109,7 @@ const rewindBtn = document.getElementById('rewind-btn');
 const forwardBtn = document.getElementById('forward-btn');
 const cameraToggleBtn = document.getElementById('camera-toggle-btn');
 
-// --- CÁLCULOS ORBITALES (sin cambios) ---
+// --- ORBITAL CALCULATIONS ---
 function toRad(d) { return d * Math.PI / 180; }
 function keplerSolve(e, M) { let E = M; for (let i = 0; i < 7; i++) { E = M + e * Math.sin(E); } return E; }
 function orbitalToHeliocentric(elements, M_deg) {
@@ -132,7 +124,7 @@ function orbitalToHeliocentric(elements, M_deg) {
     return new THREE.Vector3(x, z, -y).multiplyScalar(SCENE_SCALE_AU);
 }
 
-// --- FUNCIÓN PARA CREAR ETIQUETAS (sin cambios) ---
+// --- UTILITY FOR CREATING LABELS ---
 function createTextLabel(text) {
     const canvas = document.createElement('canvas'); const context = canvas.getContext('2d');
     const fontSize = 128; context.font = `bold ${fontSize}px "Arial Narrow", Arial, sans-serif`;
@@ -145,7 +137,7 @@ function createTextLabel(text) {
     return sprite;
 }
 
-// --- INICIALIZACIÓN DE LA ESCENA 3D (sin cambios) ---
+// --- 3D SCENE INITIALIZATION ---
 function initThree() {
     scene = new THREE.Scene();
     textureLoader = new THREE.TextureLoader();
@@ -160,41 +152,75 @@ function initThree() {
     starGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starVertices, 3));
     scene.add(new THREE.Points(starGeometry, new THREE.PointsMaterial({ color: 0xffffff, size: 0.2 })));
     sun = new THREE.Mesh(new THREE.SphereGeometry(0.8, 32, 32), new THREE.MeshBasicMaterial({ color: 0xffff00 }));
-    const sunLabel = createTextLabel("Sol"); sunLabel.position.y = 1.5; sun.add(sunLabel); scene.add(sun);
+    const sunLabel = createTextLabel("Sun"); sunLabel.position.y = 1.5; sun.add(sunLabel); scene.add(sun);
     const directionalLight = new THREE.DirectionalLight(0xffffff, 2); directionalLight.position.set(0, 5, 10).normalize(); scene.add(directionalLight);
     const ambientLight = new THREE.AmbientLight(0x404040, 3); scene.add(ambientLight);
     earth = new THREE.Mesh(new THREE.SphereGeometry(0.18, 64, 64), new THREE.MeshStandardMaterial({ map: textureLoader.load('https://threejs.org/examples/textures/land_ocean_ice_cloud_2048.jpg'), metalness: 0.1, roughness: 0.7 }));
-    const earthLabel = createTextLabel("Tierra"); earthLabel.position.y = 0.5; earth.add(earthLabel); scene.add(earth);
+    const earthLabel = createTextLabel("Earth"); earthLabel.position.y = 0.5; earth.add(earthLabel); scene.add(earth);
     asteroidTexture = textureLoader.load('https://www.solarsystemscope.com/textures/download/2k_ceres_fictional.jpg');
+    starTexture = textureLoader.load('https://threejs.org/examples/textures/sprites/spark1.png'); // For the marker
     const earthOrbitPoints = new THREE.Path().absellipse(0, 0, 1 * SCENE_SCALE_AU, 1 * SCENE_SCALE_AU, 0, Math.PI * 2, false).getPoints(128);
     const earthOrbitGeom = new THREE.BufferGeometry().setFromPoints(earthOrbitPoints);
     earthOrbitLine = new THREE.Line(earthOrbitGeom, new THREE.LineBasicMaterial({ color: 0x00FFFF }));
     earthOrbitLine.rotation.x = -Math.PI / 2;
-    const earthOrbitLabel = createTextLabel("Órbita Terrestre");
+    const earthOrbitLabel = createTextLabel("Earth Orbit");
     earthOrbitLabel.position.copy(earthOrbitPoints[32]).applyAxisAngle(new THREE.Vector3(1,0,0), -Math.PI/2);
     earthOrbitLabel.position.y += 0.5; scene.add(earthOrbitLabel); scene.add(earthOrbitLine);
     proximityLine = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ linewidth: 3 })); scene.add(proximityLine);
     window.addEventListener("resize", () => { camera.aspect = window.innerWidth/window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
 }
 
-// --- FUNCIÓN PARA MOSTRAR LA ÓRBITA DEL ASTEROIDE ---
-function mostrarOrbita(a) {
+// --- MODIFIED FUNCTION TO DISPLAY ORBIT(S) ---
+function showOrbit(a) {
     currentAsteroid = a;
-    const points = [];
-    for (let M_deg = 0; M_deg <= 360; M_deg++) { points.push(orbitalToHeliocentric(a.elements, M_deg)); }
-    const geometry = new THREE.BufferGeometry().setFromPoints(points);
-    const material = new THREE.LineBasicMaterial({ color: a.peligroso ? 0xFF0000 : 0x00FF00 });
-    astOrbitLine = new THREE.Line(geometry, material);
+    
+    // --- Clear old objects from the scene ---
+    if (astOrbitLine) scene.remove(astOrbitLine);
+    if (safeOrbitLine) scene.remove(safeOrbitLine);
+    if (deflectionPointMarker) scene.remove(deflectionPointMarker);
+    if (asteroid) scene.remove(asteroid);
+    if (astOrbitLabel) scene.remove(astOrbitLabel);
+    
+    // Ensure all orbital elements are numbers for calculations
+    Object.keys(a.elements).forEach(key => a.elements[key] = parseFloat(a.elements[key]));
+
+    // --- Draw Original Orbit ---
+    const originalPoints = [];
+    for (let M_deg = 0; M_deg <= 360; M_deg++) { originalPoints.push(orbitalToHeliocentric(a.elements, M_deg)); }
+    const originalGeom = new THREE.BufferGeometry().setFromPoints(originalPoints);
+    const originalMat = new THREE.LineBasicMaterial({ color: a.hazardous ? 0xFF0000 : 0x00FF00 });
+    astOrbitLine = new THREE.Line(originalGeom, originalMat);
     scene.add(astOrbitLine);
     
-    astOrbitLabel = createTextLabel("Órbita Asteroide");
-    astOrbitLabel.position.copy(points[Math.floor(points.length * 0.25)]);
+    astOrbitLabel = createTextLabel("Original Orbit");
+    astOrbitLabel.position.copy(originalPoints[Math.floor(originalPoints.length * 0.25)]);
     astOrbitLabel.position.y += 0.5; scene.add(astOrbitLabel);
     
+    // --- Draw Asteroid ---
     asteroid = new THREE.Mesh(new THREE.SphereGeometry(0.08, 32, 32), new THREE.MeshStandardMaterial({ map: asteroidTexture, roughness: 0.9, metalness: 0.1 }));
-    astNameLabel = createTextLabel(a.nombre);
+    astNameLabel = createTextLabel(a.name);
     astNameLabel.position.y = 0.5; asteroid.add(astNameLabel); scene.add(asteroid);
-    
+
+    // --- IF DEFLECTION DATA EXISTS, DRAW NEW ORBIT AND MARKER ---
+    if (deflectionData) {
+        // Create the orbital elements for the new orbit (only 'a' and 'e' change)
+        const newElements = { ...a.elements, ...deflectionData.new_orbit_params };
+
+        const safePoints = [];
+        for (let M_deg = 0; M_deg <= 360; M_deg++) { safePoints.push(orbitalToHeliocentric(newElements, M_deg)); }
+        const safeGeom = new THREE.BufferGeometry().setFromPoints(safePoints);
+        safeOrbitLine = new THREE.Line(safeGeom, new THREE.LineBasicMaterial({ color: 0x00FFFF })); // Cyan color
+        scene.add(safeOrbitLine);
+        
+        // Aphelion is at 180 degrees from the perihelion's mean anomaly (M=0)
+        const aphelionPosition = orbitalToHeliocentric(a.elements, 180);
+        deflectionPointMarker = new THREE.Sprite(new THREE.SpriteMaterial({ map: starTexture, color: 0xffff00, blending: THREE.AdditiveBlending }));
+        deflectionPointMarker.position.copy(aphelionPosition);
+        deflectionPointMarker.scale.set(1.5, 1.5, 1.5);
+        scene.add(deflectionPointMarker);
+    }
+
+    // --- Sync Simulation ---
     let minDistance = Infinity, closestApproachTime = 0;
     const earthElements = { a: 1, e: 0.0167, i: 0, raan: 0, omega: 102.9, M: 0 };
     for (let time = 0; time < 360; time++) {
@@ -205,24 +231,22 @@ function mostrarOrbita(a) {
         const distance = earthPos.distanceTo(astPos);
         if (distance < minDistance) { minDistance = distance; closestApproachTime = time; }
     }
-
     isPaused = true; playPauseBtn.textContent = "Play";
     simulationTime = closestApproachTime; slider.value = simulationTime;
     updatePositions(simulationTime);
 }
 
-// --- CONTROLES DE SIMULACIÓN (sin cambios) ---
+// --- Controls and Animation Loop ---
 playPauseBtn.addEventListener('click', () => { isPaused = !isPaused; if (!isPaused && simulationSpeed === 0) { simulationSpeed = 0.05; } playPauseBtn.textContent = isPaused ? "Play" : "Pause"; });
 rewindBtn.addEventListener('click', () => { simulationSpeed = -0.1; isPaused = false; playPauseBtn.textContent = "Pause"; });
 forwardBtn.addEventListener('click', () => { simulationSpeed = 0.2; isPaused = false; playPauseBtn.textContent = "Pause"; });
 slider.addEventListener('input', () => { simulationTime = parseFloat(slider.value); isPaused = true; playPauseBtn.textContent = "Play"; simulationSpeed = 0; updatePositions(simulationTime); });
 cameraToggleBtn.addEventListener('click', () => {
     followEarth = !followEarth;
-    cameraToggleBtn.textContent = followEarth ? "Free Camera" : "Follow the Earth";
+    cameraToggleBtn.textContent = followEarth ? "Free Camera" : "Follow Earth";
     if (followEarth) { controls.target.copy(earth.position); }
 });
 
-// --- BUCLE Y ACTUALIZACIÓN DE POSICIONES (sin cambios) ---
 const earthElements = { a: 1, e: 0.0167, i: 0, raan: 0, omega: 102.9, M: 0 };
 const cameraOffset = new THREE.Vector3(0, 3, 7);
 function updatePositions(time) {
@@ -240,7 +264,7 @@ function updatePositions(time) {
     else if (lunarDistances < 5) proximityLine.material.color.set(0xFFA500);
     else if (lunarDistances < 10) proximityLine.material.color.set(0xFFFF00);
     else proximityLine.material.color.set(0xFFFFFF);
-    liveDistanceEl.textContent = `${new Intl.NumberFormat('es-MX').format(distanceKM.toFixed(0))} km (${lunarDistances.toFixed(2)} LD)`;
+    liveDistanceEl.textContent = `${new Intl.NumberFormat('en-US').format(distanceKM.toFixed(0))} km (${lunarDistances.toFixed(2)} LD)`;
 }
 function animate() {
     requestAnimationFrame(animate);
@@ -251,29 +275,24 @@ function animate() {
         updatePositions(simulationTime);
     }
     earth.rotation.y += 0.01;
+    if (deflectionPointMarker) { deflectionPointMarker.rotation.z += 0.01; } // Animate the marker
     if (followEarth) { camera.position.copy(earth.position).add(cameraOffset); controls.target.copy(earth.position); }
     controls.update();
     renderer.render(scene, camera);
 }
 
-// --- FUNCIÓN DE INICIO ---
+// --- Initialization Function ---
 function initializeSimulator() {
-    // Comprueba si se proporcionaron datos válidos
-    if (!asteroidData || !asteroidData.elements || asteroidData.elements.a === 0) {
-        document.getElementById('panel').innerHTML = `
-            <h3>Error</h3>
-            <div id="params" style="color: #ffc107;">No se proporcionaron datos orbitales válidos para la simulación.</div>
-            <a href="/" class="back-button">← Volver a la Búsqueda</a>`;
-        console.error("Datos del asteroide no válidos:", asteroidData);
+    if (!asteroidData || !asteroidData.elements || !asteroidData.elements.a) {
+        document.getElementById('panel').innerHTML = `<h3>Error</h3><div id="params" style="color: #ffc107;">No valid orbital data was provided.</div><a href="/" class="back-button">← Back to Search</a>`;
+        console.error("Invalid asteroid data:", asteroidData);
         return;
     }
-    // Si los datos son válidos, inicia la simulación
     initThree();
-    mostrarOrbita(asteroidData);
+    showOrbit(asteroidData);
     animate();
 }
 
-// Llama a la función de inicio
 initializeSimulator();
 
 </script>

@@ -1,19 +1,82 @@
-from flask import Flask, request, render_template, jsonify
+from flask import Flask, request, render_template
 import requests
 from datetime import datetime, timedelta
-import json
+import math # Necesario para los cálculos
 
 app = Flask(__name__)
 
-# Es mejor usar una clave de API única y válida.
 API_KEY = "xbbp4akfa2CLalR3wKfnGGZPrh7uvwDowMRqAH7t" 
 BASE_URL = "https://api.nasa.gov/neo/rest/v1/"
+
+def calculate_deflection_dv(orbital_data):
+    """
+    Calcula el delta-v necesario para hacer segura la órbita de un asteroide.
+    Modelo simplificado: aplica un impulso en el afelio para elevar el perihelio.
+    """
+    try:
+        # Constantes físicas
+        G = 6.67430e-11  # Constante gravitacional
+        M_SUN = 1.989e30  # Masa del Sol en kg
+        AU_TO_M = 149597870700  # UA en metros
+
+        # Parámetros orbitales originales
+        a_au = float(orbital_data['semi_major_axis'])
+        e = float(orbital_data['eccentricity'])
+        
+        a_m = a_au * AU_TO_M # Eje semi-mayor en metros
+        
+        # Distancias originales en metros
+        q_old_m = a_m * (1 - e) # Perihelio
+        Q_old_m = a_m * (1 + e) # Afelio (este punto se mantiene)
+
+        # Objetivo: elevar el perihelio a una distancia segura (afelio de la Tierra + 0.05 UA)
+        TARGET_PERIHELION_AU = 1.017 + 0.05
+        q_new_m = TARGET_PERIHELION_AU * AU_TO_M
+
+        # Si el perihelio ya es seguro, no se necesita desvío
+        if q_old_m >= q_new_m:
+            return None
+
+        # Usando la fórmula de la energía orbital (ecuación vis-viva)
+        # v = sqrt(GM * (2/r - 1/a))
+        
+        # 1. Calcular velocidad en el afelio de la órbita original
+        v_aphelion_old = math.sqrt(G * M_SUN * ((2 / Q_old_m) - (1 / a_m)))
+
+        # 2. Calcular el nuevo eje semi-mayor para la órbita segura
+        # Como Q se mantiene y q cambia, a_new = (Q_old + q_new) / 2
+        a_new_m = (Q_old_m + q_new_m) / 2
+
+        # 3. Calcular la nueva velocidad necesaria en el afelio
+        v_aphelion_new = math.sqrt(G * M_SUN * ((2 / Q_old_m) - (1 / a_new_m)))
+
+        # 4. El delta-v es la diferencia entre la velocidad nueva y la antigua
+        delta_v = v_aphelion_new - v_aphelion_old
+        
+        # Nuevos parámetros orbitales para la visualización
+        a_new_au = a_new_m / AU_TO_M
+        e_new = (Q_old_m - q_new_m) / (Q_old_m + q_new_m)
+
+        return {
+            "required_dv_ms": delta_v,
+            "target_perihelion_au": TARGET_PERIHELION_AU,
+            "new_orbit_params": {
+                "a": a_new_au,
+                "e": e_new
+            }
+        }
+
+    except (ValueError, KeyError, TypeError):
+        # En caso de datos faltantes o incorrectos
+        return None
 
 @app.route("/", methods=["GET"])
 def index():
     asteroid_id = request.args.get("asteroid_id")
     asteroid_data = None
     error = None
+    deflection_data = None 
+
     if asteroid_id:
         url = f"{BASE_URL}neo/{asteroid_id}?api_key={API_KEY}"
         try:
@@ -46,6 +109,10 @@ def index():
                 'perihelion_distance': orbital_data.get('perihelion_distance', 'N/A'),
                 'aphelion_distance': orbital_data.get('aphelion_distance', 'N/A')
             }
+
+            if asteroid_data['is_potentially_hazardous_asteroid']:
+                deflection_data = calculate_deflection_dv(orbital_data)
+
         except requests.exceptions.HTTPError:
             error = "Asteroid ID not found or API error."
         except (KeyError, IndexError, TypeError) as e:
@@ -53,7 +120,7 @@ def index():
         except Exception as err:
             error = f"An unexpected error occurred: {err}"
             
-    return render_template("index.html", asteroid_data=asteroid_data, error=error)
+    return render_template("index.html", asteroid_data=asteroid_data, deflection_data=deflection_data, error=error)
 
 @app.route("/list")
 def list_asteroids():
@@ -82,28 +149,38 @@ def list_asteroids():
         error = "Could not retrieve the list of asteroids from the NASA API."
     except Exception as e:
         error = f"An unexpected error occurred: {e}"
+        
     return render_template("list.html", asteroids=asteroids_list, error=error)
 
 @app.route("/mapa")
 def mapa():
+    # Esta línea renderiza el simulador de impacto en el mapa
     return render_template("mapa.html")
 
-# --- RUTA /sim MODIFICADA ---
 @app.route("/sim")
 def sim():
-    # Recolecta los parámetros orbitales de la URL
-    orbital_params = {
+    original_params = {
         "name": request.args.get('name', 'Unknown Asteroid'),
         "hazardous": request.args.get('hazardous', 'false').lower() == 'true',
-        "sma": request.args.get('sma', '0'),
-        "ecc": request.args.get('ecc', '0'),
-        "inc": request.args.get('inc', '0'),
-        "raan": request.args.get('raan', '0'),
-        "omega": request.args.get('omega', '0'),
-        "m": request.args.get('m', '0')
+        "elements": {
+            "a": request.args.get('sma', '0'),
+            "e": request.args.get('ecc', '0'),
+            "i": request.args.get('inc', '0'),
+            "raan": request.args.get('raan', '0'),
+            "omega": request.args.get('omega', '0'),
+            "M": request.args.get('m', '0')
+        }
     }
-    # Pasa el diccionario de parámetros a la plantilla
-    return render_template("sim.html", asteroid=orbital_params)
+
+    deflection_data = None
+    if original_params["hazardous"]:
+        orbital_data_for_calc = {
+            'semi_major_axis': original_params['elements']['a'],
+            'eccentricity': original_params['elements']['e']
+        }
+        deflection_data = calculate_deflection_dv(orbital_data_for_calc)
+
+    return render_template("sim.html", asteroid=original_params, deflection_data=deflection_data)
 
 if __name__ == "__main__":
     app.run(debug=True)
