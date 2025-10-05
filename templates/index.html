@@ -188,7 +188,6 @@
                 <h4>Parameters for Impact and Consequences ☄️</h4>
                 <ul>
                     <li><b>Estimated Diameter:</b> between {{ asteroid_data.diameter_meters.min }} and {{ asteroid_data.diameter_meters.max }} meters</li>
-                    <li><b>Date of Next Approach:</b> {{ asteroid_data.close_approach.date }}</li>
                     <li><b>Relative Approach Velocity:</b> {{ "%.2f"|format(asteroid_data.close_approach.velocity_kps|float) }} km/s</li>
                     <li><b>Miss Distance (minimum):</b> {{ "%.2f"|format(asteroid_data.close_approach.miss_distance_km|float) }} km</li>
                 </ul>
@@ -235,4 +234,5 @@
     </footer>
 
 </body>
+
 </html>
