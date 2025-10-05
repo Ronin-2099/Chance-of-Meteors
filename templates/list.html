@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Listado de Objetos Cercanos a la Tierra</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #1a1a2e;
+            color: #e0e0e0;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            width: 90%;
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 20px;
+            background-color: #2a2a4a;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+        }
+        h1 {
+            text-align: center;
+            color: #00aaff;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            padding: 12px 15px;
+            border: 1px solid #4a4a6a;
+            text-align: left;
+        }
+        th {
+            background-color: #3a3a5a;
+        }
+        .pha {
+            background-color: #6d2020;
+            color: #ffdddd;
+            font-weight: bold;
+        }
+        .pha td:first-child::before {
+            content: "⚠️ ";
+        }
+        a {
+            color: #00aaff;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Listado de Objetos Cercanos a la Tierra (Próximos 7 días)</h1>
+        <p><a href="/">&larr; Volver al buscador</a></p>
+        
+        {% if error %}
+            <p style="color: red; text-align: center;">{{ error }}</p>
+        {% else %}
+        <table>
+            <thead>
+                <tr>
+                    <th>ID del Objeto</th>
+                    <th>Nombre</th>
+                    <th>Diámetro Estimado (m)</th>
+                    <th>Fecha de Aproximación</th> <th>Potencialmente Peligroso</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for asteroid in asteroids %}
+                    <tr class="{{ 'pha' if asteroid.is_potentially_hazardous_asteroid else '' }}">
+                        <td>
+                            <a href="/?asteroid_id={{ asteroid.id }}">{{ asteroid.id }}</a>
+                        </td>
+                        <td>{{ asteroid.name }}</td>
+                        <td>{{ asteroid.diameter_min }} - {{ asteroid.diameter_max }}</td>
+                        <td>{{ asteroid.approach_date }}</td> <td>{{ 'Sí' if asteroid.is_potentially_hazardous_asteroid else 'No' }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+    </div>
+</body>
+</html>
