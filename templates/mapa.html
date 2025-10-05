@@ -2,11 +2,10 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Mapa Interactivo de Impacto</title>
-
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-          crossorigin=""/>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Interactive Map of Impact</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 
     <style>
         body {
@@ -21,8 +20,8 @@
             color: #e0e0e0;
             margin-top: 20px;
         }
-        /* Contenedor principal para el mapa */
-        #map-container {
+        /* Contenedor principal para toda la aplicación */
+        .main-container {
             width: 90%;
             max-width: 1000px;
             margin: 30px auto;
@@ -37,63 +36,71 @@
             width: 100%;
             border-radius: 8px;
             box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            margin-bottom: 20px;
         }
         /* Estilos para los controles */
         .controls {
-            margin-bottom: 20px;
-            display: flex;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
             gap: 15px;
-            align-items: center;
-            justify-content: center;
-            flex-wrap: wrap;
+            margin-bottom: 20px;
         }
-        .controls input, .controls select {
-            padding: 8px;
+        .controls label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 0.9em;
+        }
+        .controls input, .controls select, .controls button {
+            width: 100%;
+            padding: 10px;
+            box-sizing: border-box;
             border: 1px solid #4a4a6a;
             border-radius: 4px;
             background-color: #3a3a5a;
             color: #e0e0e0;
+            font-size: 1em;
         }
         .controls button {
-            padding: 8px 15px;
-            border: none;
             background-color: #007bff;
-            color: white;
-            border-radius: 4px;
             cursor: pointer;
             transition: background-color 0.3s;
         }
         .controls button:hover {
             background-color: #0056b3;
         }
-        .controls #clearBtn {
-             background-color: #dc3545;
+        .wide {
+            grid-column: 1 / -1; /* Ocupa todo el ancho */
         }
-        .controls #clearBtn:hover {
-            background-color: #c82333;
+        .hint {
+            font-size: 0.85rem;
+            color: #aaa;
+            margin-top: 6px;
+            text-align: center;
         }
-        /* Estilos para la sección de información de elevación */
-        .info {
+        /* Estilos para la sección de resultados */
+        .results {
             margin-top: 20px;
             padding: 15px;
             background-color: #1a1a2e;
             border: 1px solid #4a4a6a;
             border-radius: 4px;
-            text-align: center;
         }
-        .info strong {
+        .results strong {
             color: #00aaff;
         }
-        #status {
-            margin-left: 15px;
-            font-style: italic;
-            color: #ffc107;
+        .results ul {
+            list-style-type: none;
+            padding: 0;
+            margin-top: 10px;
         }
-        /* --- NUEVOS ESTILOS PARA EL ENLACE DE REGRESO --- */
+        .results li {
+            padding: 4px 0;
+        }
+        /* Estilo para el enlace de regreso */
         .back-link {
             display: block;
             text-align: center;
-            margin-bottom: 20px;
+            margin: -10px 0 20px 0;
             font-size: 1.1em;
         }
         .back-link a {
@@ -106,143 +113,173 @@
     </style>
 </head>
 <body>
-
-    <h1>Mapa Interactivo de Impacto ☄️</h1>
-
+    <h1>Interactive Map of Impact ☄️</h1>
+    
     <div class="back-link">
-        <a href="{{ url_for('index') }}">&larr; Volver al buscador</a>
+        <a href="{{ url_for('index') }}">&larr; Return to homepage</a>
     </div>
 
-    <div id="map-container">
-        <div class="controls">
-            <label>Lat: <input id="lat" type="number" step="any" value="20.0" placeholder="Latitud"></label>
-            <label>Lon: <input id="lon" type="number" step="any" value="-100.0" placeholder="Longitud"></label>
-            <label>Radio (km): <input id="radius" type="number" step="any" value="10" placeholder="Radio"></label>
-            <select id="elevMode">
-                <option value="open-elevation">Open-Elevation (público)</option>
-                <option value="local-api">Mi GeoTIFF local (backend Flask)</option>
-            </select>
-            <button id="consultBtn">Consultar y Dibujar</button>
-            <button id="clearBtn">Limpiar Mapa</button>
-            <span id="status"></span>
-        </div>
+    <div class="main-container">
         <div id="map"></div>
-        <div class="info">
-            <strong>Elevación del punto de impacto:</strong> <span id="elevation">—</span>
+        
+        <div class="controls">
+            <div>
+                <label for="diameter">Asteroid's Diameter (m):</label>
+                <input id="diameter" type="number" step="any" value="50" />
+            </div>
+            <div>
+                <label for="velocity">Velocity (m/s):</label>
+                <input id="velocity" type="number" step="any" value="15000" />
+            </div>
+            <div>
+                <label for="p_crater">Asteroid's Density (kg/m³)</label>
+                <input id="p_crater" type="number" step="any" value="3000" />
+            </div>
+            <div>
+                <label for="p_surface">Surface's Density (kg/m³)</label>
+                <input id="p_surface" type="number" step="any" value="1500" />
+            </div>
+            <div class="wide">
+                <label for="terrain">Terrain ( Choice affects the "k" constant):</label>
+                <select id="terrain">
+                    <option value="rock">Rock</option>
+                    <option value="sand" selected>Sand</option>
+                    <option value="ice">Ice</option>
+                    <option value="water">Water</option>
+                </select>
+            </div>
+            <div class="wide">
+                <label for="coords">Coordinates of Impact (Lat, Long):</label>
+                <input id="coords" type="text" placeholder="25.6866,-100.3161" value="25.6866,-100.3161" />
+            </div>
+            <div class="wide">
+                <button id="compute">Calculate and Draw Impact</button>
+                <div class="hint">Click on the map to visualize impact.</div>
+            </div>
+        </div>
+
+        <div class="results" id="results">
+            <strong>Results:</strong>
+            <div id="out">Results haven´t yet been calculated.</div>
         </div>
     </div>
-
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-    <script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
+    
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
     <script>
-        // El script de JavaScript no necesita cambios
-        document.addEventListener('DOMContentLoaded', () => {
-            initImpactMap();
-        });
+        // --- Lógica de la calculadora (sin cambios) ---
+        function computeImpact(params) {
+            const d = Number(params.d);
+            const v = Number(params.v);
+            const p_crater = Number(params.p_crater);
+            const p_surface = Number(params.p_surface);
+            if (!d || !v || !p_crater || !p_surface) {
+                return { error: "Todos los parámetros numéricos deben ser mayores que 0." };
+            }
+            const m = (4/3) * Math.PI * Math.pow(d/2, 3) * p_crater;
+            const E = 0.5 * m * Math.pow(v, 2);
+            let k = 0.3;
+            const terrain = (params.terrain || "sand").toLowerCase();
+            if (terrain === 'rock') k = 0.22;
+            else if (terrain === 'sand') k = 0.3;
+            else if (terrain === 'ice') k = 0.5;
+            else if (terrain === 'water') k = 0.6;
+            const R = k * Math.pow(p_crater / p_surface, 1/3) * Math.pow(d, 0.78) * Math.pow(v, 0.44);
+            const D_km = (2 * R) / 1000;
+            return { d, v, p_crater, p_surface, terrain, k, mass_kg: m, energy_j: E, radius_m: R, diameter_km: D_km };
+        }
 
-        function initImpactMap() {
-            // ... (Toda tu lógica de JavaScript permanece igual)
-            const map = L.map('map').setView([20.0, -100.0], 4);
+        // --- Lógica del mapa y eventos ---
+        document.addEventListener('DOMContentLoaded', () => {
+            // === CÓDIGO NUEVO PARA LEER PARÁMETROS DE LA URL ===
+            const urlParams = new URLSearchParams(window.location.search);
+            const diameterParam = urlParams.get('diameter');
+            const velocityParam = urlParams.get('velocity');
+
+            if (diameterParam) {
+                // Redondeamos a 2 decimales para que se vea limpio
+                document.getElementById('diameter').value = parseFloat(diameterParam).toFixed(2);
+            }
+            if (velocityParam) {
+                document.getElementById('velocity').value = parseFloat(velocityParam).toFixed(2);
+            }
+            // === FIN DEL CÓDIGO NUEVO ===
+
+            const defaultCenter = [25.6866, -100.3161];
+            const map = L.map('map').setView(defaultCenter, 10);
+
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 maxZoom: 19,
-                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                attribution: '&copy; OpenStreetMap contributors'
             }).addTo(map);
 
-            let markerLayer = L.layerGroup().addTo(map);
-            let circleLayer = L.layerGroup().addTo(map);
+            let impactMarker = null;
+            let impactCircle = null;
 
-            const latInput = document.getElementById('lat');
-            const lonInput = document.getElementById('lon');
-            const radiusInput = document.getElementById('radius');
-            const consultBtn = document.getElementById('consultBtn');
-            const clearBtn = document.getElementById('clearBtn');
-            const elevationSpan = document.getElementById('elevation');
-            const statusSpan = document.getElementById('status');
-            const elevModeSelect = document.getElementById('elevMode');
+            function setImpactMarker(latlng) {
+                if (impactMarker) map.removeLayer(impactMarker);
+                impactMarker = L.marker(latlng).addTo(map);
+            }
 
-            async function consultAndDraw() {
-                const lat = parseFloat(latInput.value);
-                const lon = parseFloat(lonInput.value);
-                const radiusKm = parseFloat(radiusInput.value);
-                if (!isFinite(lat) || !isFinite(lon) || !isFinite(radiusKm) || radiusKm <= 0) {
-                    alert('Por favor, introduce una latitud, longitud y radio válidos.');
+            function drawImpactCircle(latlng, radius_m, popupHtml) {
+                if (impactCircle) map.removeLayer(impactCircle);
+                impactCircle = L.circle(latlng, { radius: radius_m, weight: 2, color: 'red', fillColor: '#f03', fillOpacity: 0.2, }).addTo(map);
+                if (popupHtml) impactCircle.bindPopup(popupHtml).openPopup();
+                map.fitBounds(impactCircle.getBounds(), { padding: [40,40] });
+            }
+
+            map.on('click', function(e) {
+                const lat = e.latlng.lat.toFixed(6);
+                const lng = e.latlng.lng.toFixed(6);
+                document.getElementById('coords').value = `${lat},${lng}`;
+                setImpactMarker(e.latlng);
+            });
+
+            document.getElementById('compute').addEventListener('click', () => {
+                const d = document.getElementById('diameter').value;
+                const v = document.getElementById('velocity').value;
+                const p_crater = document.getElementById('p_crater').value;
+                const p_surface = document.getElementById('p_surface').value;
+                const terrain = document.getElementById('terrain').value;
+                const coordsText = document.getElementById('coords').value;
+
+                const coordsParts = coordsText.split(',').map(s => s.trim()).filter(Boolean);
+                if (coordsParts.length !== 2 || isNaN(Number(coordsParts[0])) || isNaN(Number(coordsParts[1]))) {
+                    alert('Introduce coordenadas válidas en formato "lat,lng" o haz clic en el mapa.');
                     return;
                 }
-                statusSpan.textContent = 'Consultando elevación…';
-                elevationSpan.textContent = '—';
-                consultBtn.disabled = true;
-                try {
-                    let elev = null;
-                    if (elevModeSelect.value === 'open-elevation') {
-                        elev = await fetchOpenElevation(lat, lon);
-                    } else {
-                        elev = await fetchLocalElevation(lat, lon);
-                    }
-                    elevationSpan.textContent = (elev !== null) ? `${elev.toFixed(2)} m` : 'No disponible';
-                    statusSpan.textContent = '¡Cálculo completado!';
-                    markerLayer.clearLayers();
-                    circleLayer.clearLayers();
-                    L.marker([lat, lon]).addTo(markerLayer)
-                        .bindPopup(`<b>Punto de Impacto</b><br>Lat: ${lat}<br>Lon: ${lon}<br>Elev: ${elev?.toFixed(2) ?? '—'} m`)
-                        .openPopup();
-                    const center = [lon, lat];
-                    const options = { steps: 128, units: 'kilometers' };
-                    const circle = turf.circle(center, radiusKm, options);
-                    L.geoJSON(circle, {
-                        style: { color: '#ff4d4d', weight: 2, fillOpacity: 0.25 }
-                    }).addTo(circleLayer);
-                    const bounds = L.geoJSON(circle).getBounds();
-                    map.fitBounds(bounds.pad(0.2));
-                } catch (err) {
-                    console.error(err);
-                    statusSpan.textContent = `Error: ${err.message}`;
-                    elevationSpan.textContent = '—';
-                } finally {
-                    consultBtn.disabled = false;
+                const lat = Number(coordsParts[0]);
+                const lng = Number(coordsParts[1]);
+
+                const result = computeImpact({ d, v, p_crater, p_surface, terrain });
+                const out = document.getElementById('out');
+
+                if (result.error) {
+                    out.innerHTML = `<span style="color:crimson;">Error: ${result.error}</span>`;
+                    return;
                 }
-            }
 
-            function clearMap() {
-                markerLayer.clearLayers();
-                circleLayer.clearLayers();
-                elevationSpan.textContent = '—';
-                statusSpan.textContent = '';
-                map.setView([20.0, -100.0], 4);
-            }
+                const massStr = result.mass_kg.toExponential(3) + ' kg';
+                const energyStr = result.energy_j.toExponential(3) + ' J';
+                const diameterStr = result.diameter_km.toFixed(3) + ' km';
+                const radiusStr_m = result.radius_m.toFixed(1) + ' m';
 
-            consultBtn.addEventListener('click', consultAndDraw);
-            clearBtn.addEventListener('click', clearMap);
+                out.innerHTML = `
+                    <ul>
+                        <li><strong>Damage radius (R):</strong> ${radiusStr_m}</li>
+                        <li><strong>Approx. damage diameter:</strong> ${diameterStr}</li>
+                        <li><strong>Kinetic energy:</strong> ${energyStr}</li>
+                        <li><strong>Estimated mass:</strong> ${massStr}</li>
+                    </ul>`;
 
-            map.on('click', e => {
-                latInput.value = e.latlng.lat.toFixed(6);
-                lonInput.value = e.latlng.lng.toFixed(6);
+                const latlng = [lat, lng];
+                setImpactMarker(latlng);
+                const popup = `<strong>Impact</strong><br/>Diameter of damage: ${diameterStr}<br/>Radius: ${radiusStr_m}`;
+                drawImpactCircle(latlng, result.radius_m, popup);
             });
-            
-            async function fetchOpenElevation(lat, lon) {
-                const url = `https://api.open-elevation.com/api/v1/lookup?locations=${lat},${lon}`;
-                const resp = await fetch(url);
-                if (!resp.ok) throw new Error('El servicio Open-Elevation falló.');
-                const data = await resp.json();
-                if (data?.results?.[0]?.elevation != null) {
-                    return Number(data.results[0].elevation);
-                }
-                return null;
-            }
 
-            async function fetchLocalElevation(lat, lon) {
-                const url = `/elevation?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`;
-                const resp = await fetch(url);
-                if (!resp.ok) {
-                    const txt = await resp.text();
-                    throw new Error(`API Local falló: ${txt}`);
-                }
-                const data = await resp.json();
-                if (data && typeof data.elevation !== 'undefined') return Number(data.elevation);
-                return null;
-            }
-        }
+            setImpactMarker(defaultCenter);
+        });
     </script>
-
 </body>
 </html>

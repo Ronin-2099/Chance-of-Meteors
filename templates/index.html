@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Explorador de Asteroides y Mapa de Coordenadas</title>
+<title>Chance of Meteors</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}"/>
 
 <style>
@@ -53,22 +53,41 @@
         text-align: center;
         font-weight: bold;
       }
+      .action-buttons {
+          display: flex;
+          justify-content: center;
+          gap: 20px;
+          margin-top: 20px;
+          flex-wrap: wrap;
+      }
+      .action-buttons a {
+          background-color: #00aaff;
+          color: white;
+          padding: 12px 20px;
+          border-radius: 5px;
+          text-decoration: none;
+          font-weight: bold;
+          font-size: 1.1em;
+          transition: background-color 0.3s;
+      }
+      .action-buttons a:hover {
+          background-color: #007bff;
+      }
 </style>
 </head>
 <body>
-<h1>Explorador de Asteroides 🔭</h1>
+<h1>Asteroid Explorer 🔭</h1>
 
 <div class="navigation-links">
-    <a href="{{ url_for('list_asteroids') }}">Ver listado completo de asteroides</a>
-    <a href="{{ url_for('mapa') }}">Simulador de Impacto ☄️</a>
+    <a href="{{ url_for('list_asteroids') }}">Whole list of registered asteroids</a>
 </div>
 
 <form method="get" class="asteroid-form">
     <div class="form-row">
-        <label for="asteroid_id">ID del Asteroide:</label>
+        <label for="asteroid_id">Asteroid's ID:</label>
         <input type="text" id="asteroid_id" name="asteroid_id" required value="{{ request.args.get('asteroid_id','') }}">
     </div>
-    <button type="submit">Cargar Datos</button>
+    <button type="submit">Load Data</button>
 </form>
 
 {% if error %}<p class="error-message">{{ error }}</p>{% endif %}
@@ -78,27 +97,52 @@
     <h2>{{ asteroid_data.name }} (ID: {{ asteroid_data.id }})</h2>
     
     {% if asteroid_data.is_potentially_hazardous_asteroid %}
-      <p style="color: #ffc107; text-align: center; font-weight: bold;">⚠️ ¡Este asteroide es potencialmente peligroso! ⚠️</p>
+      <p style="color: #ffc107; text-align: center; font-weight: bold;">⚠️ This asteroid is potentially dangerous! ⚠️</p>
     {% endif %}
 
-    <h4>Parámetros para Cálculo de Órbita 🪐</h4>
+    <h4>Parameters for Orbit Calculation 🪐</h4>
     <ul>
-        <li><b>Semieje Mayor:</b> {{ asteroid_data.semi_major_axis }} UA (distancia promedio al Sol)</li>
-        <li><b>Excentricidad de la Órbita:</b> {{ asteroid_data.eccentricity }} (define la forma de la elipse)</li>
-        <li><b>Inclinación Orbital:</b> {{ asteroid_data.inclination }}° (respecto al plano de la Tierra)</li>
-        <li><b>Periodo Orbital:</b> {{ asteroid_data.orbital_period }} días (cuánto tarda en dar una vuelta al Sol)</li>
-        <li><b>Perihelio (distancia más cercana al Sol):</b> {{ asteroid_data.perihelion_distance }} UA</li>
-        <li><b>Afelio (distancia más lejana al Sol):</b> {{ asteroid_data.aphelion_distance }} UA</li>
+        <li><b>Semi-Major Axis (a):</b> {{ asteroid_data.semi_major_axis }} AU (defines orbit size)</li>
+        <li><b>Eccentricity (e):</b> {{ asteroid_data.eccentricity }} (defines orbit shape)</li>
+        <li><b>Inclination (i):</b> {{ asteroid_data.inclination }}° (defines orbit tilt)</li>
+        <li><b>Ascending Node Longitude (Ω):</b> {{ asteroid_data.ascending_node_longitude }}° (defines orbit orientation)</li>
+        <li><b>Argument of Perihelion (ω):</b> {{ asteroid_data.perihelion_argument }}° (defines ellipse rotation)</li>
+        <li><b>Mean Anomaly (M):</b> {{ asteroid_data.mean_anomaly }}° (defines position at a specific time)</li>
+        <hr style="border-color: #4a4a6a; margin: 10px 0;">
+        <li><b>Orbital Period:</b> {{ asteroid_data.orbital_period }} days (time to orbit the Sun)</li>
+        <li><b>Perihelion:</b> {{ asteroid_data.perihelion_distance }} AU (closest to Sun)</li>
+        <li><b>Aphelion:</b> {{ asteroid_data.aphelion_distance }} AU (farthest from Sun)</li>
     </ul>
     <hr>
-    <h4>Parámetros para Impacto y Consecuencias ☄️</h4>
+    <h4>Parameters for Impact and Consequences ☄️</h4>
     <ul>
-        <li><b>Diámetro Estimado:</b> entre {{ asteroid_data.diameter_meters.min }} y {{ asteroid_data.diameter_meters.max }} metros</li>
-        <li><b>Fecha de Próxima Aproximación:</b> {{ asteroid_data.close_approach.date }}</li>
-        <li><b>Velocidad Relativa en Aproximación:</b> {{ asteroid_data.close_approach.velocity_kps }} km/s</li>
-        <li><b>Distancia de Paso (mínima):</b> {{ "%.2f"|format(asteroid_data.close_approach.miss_distance_km) }} km</li>
+        <li><b>Estimated Diameter:</b> between {{ asteroid_data.diameter_meters.min }} and {{ asteroid_data.diameter_meters.max }} meters</li>
+        <li><b>Date of Next Approach:</b> {{ asteroid_data.close_approach.date }}</li>
+        <li><b>Relative Approach Velocity:</b> {{ asteroid_data.close_approach.velocity_kps }} km/s</li>
+        <li><b>Miss Distance (minimum):</b> {{ "%.2f"|format(asteroid_data.close_approach.miss_distance_km) }} km</li>
     </ul>
-</div>
+    <hr>
+    
+    <div class="action-buttons">
+        <a href="{{ url_for('mapa', 
+                      diameter=(asteroid_data.diameter_meters.min + asteroid_data.diameter_meters.max) / 2, 
+                      velocity=asteroid_data.close_approach.velocity_kps * 1000) }}">
+            Simulate Impact ☄️
+        </a>
+        
+        <a href="{{ url_for('sim', 
+                      name=asteroid_data.name,
+                      sma=asteroid_data.semi_major_axis,
+                      ecc=asteroid_data.eccentricity,
+                      inc=asteroid_data.inclination,
+                      raan=asteroid_data.ascending_node_longitude,
+                      omega=asteroid_data.perihelion_argument,
+                      m=asteroid_data.mean_anomaly,
+                      hazardous=asteroid_data.is_potentially_hazardous_asteroid) }}">
+            Visualize Orbit 🪐
+        </a>
+    </div>
+    </div>
 {% endif %}
 
 </body>

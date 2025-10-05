@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Listado de Objetos Cercanos a la Tierra</title>
+    <title>List of objects near to Earth</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -56,8 +56,8 @@
 </head>
 <body>
     <div class="container">
-        <h1>Listado de Objetos Cercanos a la Tierra (Próximos 7 días)</h1>
-        <p><a href="/">&larr; Volver al buscador</a></p>
+        <h1>List of objects near to Earth (In the next 7 days)</h1>
+        <p><a href="/">&larr; Return to homepage</a></p>
         
         {% if error %}
             <p style="color: red; text-align: center;">{{ error }}</p>
@@ -65,10 +65,10 @@
         <table>
             <thead>
                 <tr>
-                    <th>ID del Objeto</th>
-                    <th>Nombre</th>
-                    <th>Diámetro Estimado (m)</th>
-                    <th>Fecha de Aproximación</th> <th>Potencialmente Peligroso</th>
+                    <th>Object's ID:</th>
+                    <th>Name</th>
+                    <th>Estimated Diameter (m)</th>
+                    <th>Date of aproximmation</th> <th>Potentially Dangerous</th>
                 </tr>
             </thead>
             <tbody>

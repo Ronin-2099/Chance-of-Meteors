@@ -1,15 +1,16 @@
 from flask import Flask, request, render_template, jsonify
 import requests
 from datetime import datetime, timedelta
+import json
 
 app = Flask(__name__)
 
-API_KEY = "mifLhJbPOjAUcoXEcksajso2jdv5zq1TIQWENMHQ" 
+# Es mejor usar una clave de API única y válida.
+API_KEY = "xbbp4akfa2CLalR3wKfnGGZPrh7uvwDowMRqAH7t" 
 BASE_URL = "https://api.nasa.gov/neo/rest/v1/"
 
 @app.route("/", methods=["GET"])
 def index():
-    # (Esta función no necesita cambios)
     asteroid_id = request.args.get("asteroid_id")
     asteroid_data = None
     error = None
@@ -21,6 +22,7 @@ def index():
             data = response.json()
             close_approach_info = data.get('close_approach_data', [{}])[0]
             orbital_data = data.get('orbital_data', {})
+            
             asteroid_data = {
                 'name': data.get('name'),
                 'id': data.get('id'),
@@ -37,16 +39,20 @@ def index():
                 'semi_major_axis': orbital_data.get('semi_major_axis', 'N/A'),
                 'eccentricity': orbital_data.get('eccentricity', 'N/A'),
                 'inclination': orbital_data.get('inclination', 'N/A'),
+                'ascending_node_longitude': orbital_data.get('ascending_node_longitude', 'N/A'),
+                'perihelion_argument': orbital_data.get('perihelion_argument', 'N/A'),
+                'mean_anomaly': orbital_data.get('mean_anomaly', 'N/A'),
                 'orbital_period': round(float(orbital_data.get('orbital_period', 0))),
                 'perihelion_distance': orbital_data.get('perihelion_distance', 'N/A'),
                 'aphelion_distance': orbital_data.get('aphelion_distance', 'N/A')
             }
         except requests.exceptions.HTTPError:
-            error = "ID de asteroide no encontrado o error en la API."
+            error = "Asteroid ID not found or API error."
         except (KeyError, IndexError, TypeError) as e:
-            error = f"Dato faltante o con formato incorrecto en la respuesta de la API: {e}"
+            error = f"Missing or incorrectly formatted data in the API response: {e}"
         except Exception as err:
-            error = f"Ocurrió un error inesperado: {err}"
+            error = f"An unexpected error occurred: {err}"
+            
     return render_template("index.html", asteroid_data=asteroid_data, error=error)
 
 @app.route("/list")
@@ -60,40 +66,44 @@ def list_asteroids():
         response = requests.get(url)
         response.raise_for_status()
         data = response.json()
-        
-        for date_str in data['near_earth_objects']:
-            for asteroid in data['near_earth_objects'][date_str]:
-                # --- SECCIÓN MODIFICADA ---
-                # Extraemos la fecha de la primera aproximación futura
-                approach_date = asteroid['close_approach_data'][0]['close_approach_date_full']
-                
-                asteroids_list.append({
-                    'id': asteroid['id'],
-                    'name': asteroid['name'],
-                    'is_potentially_hazardous_asteroid': asteroid['is_potentially_hazardous_asteroid'],
-                    'diameter_min': round(asteroid['estimated_diameter']['meters']['estimated_diameter_min'], 2),
-                    'diameter_max': round(asteroid['estimated_diameter']['meters']['estimated_diameter_max'], 2),
-                    'approach_date': approach_date # <-- Fecha añadida aquí
+        temp_list = []
+        for date_str in data.get('near_earth_objects', {}):
+            for asteroid_data in data['near_earth_objects'][date_str]:
+                temp_list.append({
+                    'id': asteroid_data['id'],
+                    'name': asteroid_data['name'],
+                    'is_potentially_hazardous_asteroid': asteroid_data['is_potentially_hazardous_asteroid'],
+                    'diameter_min': round(asteroid_data['estimated_diameter']['meters']['estimated_diameter_min'], 2),
+                    'diameter_max': round(asteroid_data['estimated_diameter']['meters']['estimated_diameter_max'], 2),
+                    'approach_date': asteroid_data['close_approach_data'][0]['close_approach_date_full']
                 })
-        
-        # Ordenamos por fecha de aproximación, no por nombre
-        asteroids_list.sort(key=lambda x: x['approach_date'])
-        # --- FIN DE LA SECCIÓN MODIFICADA ---
-
+        asteroids_list = sorted(temp_list, key=lambda x: x['approach_date'])
     except requests.exceptions.HTTPError:
-        error = "No se pudo obtener la lista de asteroides de la API de NASA."
+        error = "Could not retrieve the list of asteroids from the NASA API."
     except Exception as e:
-        error = f"Ocurrió un error inesperado: {e}"
-    
+        error = f"An unexpected error occurred: {e}"
     return render_template("list.html", asteroids=asteroids_list, error=error)
 
 @app.route("/mapa")
 def mapa():
     return render_template("mapa.html")
 
-@app.route("/elevation")
-def get_elevation():
-    return jsonify({"elevation": 1500.0})
+# --- RUTA /sim MODIFICADA ---
+@app.route("/sim")
+def sim():
+    # Recolecta los parámetros orbitales de la URL
+    orbital_params = {
+        "name": request.args.get('name', 'Unknown Asteroid'),
+        "hazardous": request.args.get('hazardous', 'false').lower() == 'true',
+        "sma": request.args.get('sma', '0'),
+        "ecc": request.args.get('ecc', '0'),
+        "inc": request.args.get('inc', '0'),
+        "raan": request.args.get('raan', '0'),
+        "omega": request.args.get('omega', '0'),
+        "m": request.args.get('m', '0')
+    }
+    # Pasa el diccionario de parámetros a la plantilla
+    return render_template("sim.html", asteroid=orbital_params)
 
 if __name__ == "__main__":
     app.run(debug=True)

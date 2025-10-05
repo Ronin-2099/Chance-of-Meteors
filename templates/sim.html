@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEO Orbital Simulator</title>
+<style>
+    html, body { margin:0; height:100%; background:#000; font-family:Arial, sans-serif; overflow:hidden; }
+    #panel {
+        position:absolute; top:10px; left:10px;
+        background: rgba(10, 20, 30, 0.85); padding:15px; color:white; z-index:10;
+        width:350px; border-radius: 8px; border: 1px solid #00aaff;
+        backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px);
+    }
+    h3, h4 { margin: 0 0 10px 0; }
+    #info, #params {
+        width:100%; margin-top:5px; padding: 8px; box-sizing: border-box;
+        background: rgba(0,0,0,0.5); color:#fff; border:1px solid #00aaff; border-radius:4px;
+        font-size: 0.9em;
+    }
+    #params ul { list-style: none; padding: 0; margin: 0; }
+    #params li { margin-bottom: 4px; }
+    #live-info { font-weight: bold; margin-top: 10px; }
+    #controls { margin-top: 15px; padding-top: 10px; border-top: 1px solid #00aaff; }
+    #controls input[type=range] { width: 100%; }
+    .button-group { display: flex; justify-content: space-around; margin-top: 8px; }
+    #controls button, .back-button { 
+        background: #003366; color: white; border: 1px solid #00aaff; padding: 5px 10px; 
+        border-radius: 4px; cursor: pointer; transition: background-color 0.2s; flex-grow: 1; margin: 0 3px;
+    }
+    #controls button:hover, .back-button:hover { background: #0055aa; }
+    #camera-toggle-btn { width: 100%; margin-top: 8px; }
+    .back-button { display: block; width: 100%; box-sizing: border-box; margin-top: 15px; text-decoration: none; text-align: center; }
+
+</style>
+</head>
+<body>
+<div id="panel">
+    <h3>🔭 NEO Orbital Viewer</h3>
+    
+    <div id="params">
+        <h4>{{ asteroid.name }}</h4>
+        <ul>
+            <li><b>Dangerous:</b> {{ 'Yes ⚠️' if asteroid.hazardous else 'No ✅' }}</li>
+            <li><b>Semi-major axis (a):</b> {{ asteroid.sma }} AU</li>
+            <li><b>Eccentricity (e):</b> {{ asteroid.ecc }}</li>
+            <li><b>Inclination (i):</b> {{ asteroid.inc }}°</li>
+            <li><b>Ascending Node Longitude. (Ω):</b> {{ asteroid.raan }}°</li>
+            <li><b>Arg. of Perihelion (ω):</b> {{ asteroid.omega }}°</li>
+            <li><b>Average Anomaly (M):</b> {{ asteroid.m }}°</li>
+        </ul>
+    </div>
+
+    <div id="info">
+        <p id="live-info">Current distance: <span id="live-distance">--</span></p>
+    </div>
+
+    <div id="controls">
+        <input type="range" id="time-slider" min="0" max="360" step="0.1" value="0">
+        <div class="button-group">
+            <button id="rewind-btn">⏪</button>
+            <button id="play-pause-btn">Pause</button>
+            <button id="forward-btn">⏩</button>
+        </div>
+        <button id="camera-toggle-btn">Free Camera</button>
+    </div>
+    <a href="/" class="back-button">← Back to Search</a>
+</div>
+
+<script type="importmap">
+{
+    "imports": {
+        "three": "https://unpkg.com/three@0.156.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.156.0/examples/jsm/"
+    }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// --- DATOS DEL ASTEROIDE (INYECTADOS POR FLASK) ---
+const asteroidData = {
+    nombre: "{{ asteroid.name }}",
+    peligroso: {{ 'true' if asteroid.hazardous else 'false' }},
+    elements: {
+        a: parseFloat("{{ asteroid.sma }}"),
+        e: parseFloat("{{ asteroid.ecc }}"),
+        i: parseFloat("{{ asteroid.inc }}"),
+        raan: parseFloat("{{ asteroid.raan }}"),
+        omega: parseFloat("{{ asteroid.omega }}"),
+        M: parseFloat("{{ asteroid.m }}")
+    }
+};
+
+// --- CONSTANTES Y ESTADO ---
+const KM_PER_AU = 149597870.7;
+const LUNAR_DISTANCE_KM = 384400;
+const SCENE_SCALE_AU = 15;
+
+let scene, camera, renderer, controls, textureLoader;
+let sun, earth, asteroid, astOrbitLine, earthOrbitLine, proximityLine;
+let currentAsteroid = null;
+const liveDistanceEl = document.getElementById('live-distance');
+let astOrbitLabel, astNameLabel;
+let asteroidTexture;
+
+let simulationTime = 0;
+let isPaused = false;
+let simulationSpeed = 0.05;
+let followEarth = true;
+
+const slider = document.getElementById('time-slider');
+const playPauseBtn = document.getElementById('play-pause-btn');
+const rewindBtn = document.getElementById('rewind-btn');
+const forwardBtn = document.getElementById('forward-btn');
+const cameraToggleBtn = document.getElementById('camera-toggle-btn');
+
+// --- CÁLCULOS ORBITALES (sin cambios) ---
+function toRad(d) { return d * Math.PI / 180; }
+function keplerSolve(e, M) { let E = M; for (let i = 0; i < 7; i++) { E = M + e * Math.sin(E); } return E; }
+function orbitalToHeliocentric(elements, M_deg) {
+    const { a, e, i, raan, omega } = elements;
+    const M_rad = toRad(M_deg); const E = keplerSolve(e, M_rad);
+    const x_orb = a * (Math.cos(E) - e); const y_orb = a * Math.sqrt(1 - e * e) * Math.sin(E);
+    const cos_w = Math.cos(toRad(omega)), sin_w = Math.sin(toRad(omega)); const cos_i = Math.cos(toRad(i)), sin_i = Math.sin(toRad(i));
+    const cos_raan = Math.cos(toRad(raan)), sin_raan = Math.sin(toRad(raan));
+    const x = (cos_raan*cos_w - sin_raan*sin_w*cos_i)*x_orb + (-cos_raan*sin_w - sin_raan*cos_w*cos_i)*y_orb;
+    const y = (sin_raan*cos_w + cos_raan*sin_w*cos_i)*x_orb + (-sin_raan*sin_w + cos_raan*cos_w*cos_i)*y_orb;
+    const z = (sin_i*sin_w)*x_orb + (sin_i*cos_w)*y_orb;
+    return new THREE.Vector3(x, z, -y).multiplyScalar(SCENE_SCALE_AU);
+}
+
+// --- FUNCIÓN PARA CREAR ETIQUETAS (sin cambios) ---
+function createTextLabel(text) {
+    const canvas = document.createElement('canvas'); const context = canvas.getContext('2d');
+    const fontSize = 128; context.font = `bold ${fontSize}px "Arial Narrow", Arial, sans-serif`;
+    const textMetrics = context.measureText(text); canvas.width = textMetrics.width + 20; canvas.height = fontSize * 1.2;
+    context.font = `bold ${fontSize}px "Arial Narrow", Arial, sans-serif`; context.textAlign = 'center'; context.textBaseline = 'middle';
+    context.shadowColor = 'black'; context.shadowBlur = 10; context.fillStyle = 'white';
+    context.fillText(text, canvas.width / 2, canvas.height / 2);
+    const texture = new THREE.CanvasTexture(canvas); const material = new THREE.SpriteMaterial({ map: texture, transparent: true });
+    const sprite = new THREE.Sprite(material); sprite.scale.set(canvas.width / 700, canvas.height / 700, 1.0);
+    return sprite;
+}
+
+// --- INICIALIZACIÓN DE LA ESCENA 3D (sin cambios) ---
+function initThree() {
+    scene = new THREE.Scene();
+    textureLoader = new THREE.TextureLoader();
+    camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 5000);
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+    controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true; controls.zoomSpeed = 2.5; controls.panSpeed = 2.0;
+    const starGeometry = new THREE.BufferGeometry(); const starVertices = [];
+    for (let i = 0; i < 10000; i++) { starVertices.push((Math.random() - 0.5) * 4000, (Math.random() - 0.5) * 4000, (Math.random() - 0.5) * 4000); }
+    starGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starVertices, 3));
+    scene.add(new THREE.Points(starGeometry, new THREE.PointsMaterial({ color: 0xffffff, size: 0.2 })));
+    sun = new THREE.Mesh(new THREE.SphereGeometry(0.8, 32, 32), new THREE.MeshBasicMaterial({ color: 0xffff00 }));
+    const sunLabel = createTextLabel("Sol"); sunLabel.position.y = 1.5; sun.add(sunLabel); scene.add(sun);
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 2); directionalLight.position.set(0, 5, 10).normalize(); scene.add(directionalLight);
+    const ambientLight = new THREE.AmbientLight(0x404040, 3); scene.add(ambientLight);
+    earth = new THREE.Mesh(new THREE.SphereGeometry(0.18, 64, 64), new THREE.MeshStandardMaterial({ map: textureLoader.load('https://threejs.org/examples/textures/land_ocean_ice_cloud_2048.jpg'), metalness: 0.1, roughness: 0.7 }));
+    const earthLabel = createTextLabel("Tierra"); earthLabel.position.y = 0.5; earth.add(earthLabel); scene.add(earth);
+    asteroidTexture = textureLoader.load('https://www.solarsystemscope.com/textures/download/2k_ceres_fictional.jpg');
+    const earthOrbitPoints = new THREE.Path().absellipse(0, 0, 1 * SCENE_SCALE_AU, 1 * SCENE_SCALE_AU, 0, Math.PI * 2, false).getPoints(128);
+    const earthOrbitGeom = new THREE.BufferGeometry().setFromPoints(earthOrbitPoints);
+    earthOrbitLine = new THREE.Line(earthOrbitGeom, new THREE.LineBasicMaterial({ color: 0x00FFFF }));
+    earthOrbitLine.rotation.x = -Math.PI / 2;
+    const earthOrbitLabel = createTextLabel("Órbita Terrestre");
+    earthOrbitLabel.position.copy(earthOrbitPoints[32]).applyAxisAngle(new THREE.Vector3(1,0,0), -Math.PI/2);
+    earthOrbitLabel.position.y += 0.5; scene.add(earthOrbitLabel); scene.add(earthOrbitLine);
+    proximityLine = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ linewidth: 3 })); scene.add(proximityLine);
+    window.addEventListener("resize", () => { camera.aspect = window.innerWidth/window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
+}
+
+// --- FUNCIÓN PARA MOSTRAR LA ÓRBITA DEL ASTEROIDE ---
+function mostrarOrbita(a) {
+    currentAsteroid = a;
+    const points = [];
+    for (let M_deg = 0; M_deg <= 360; M_deg++) { points.push(orbitalToHeliocentric(a.elements, M_deg)); }
+    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+    const material = new THREE.LineBasicMaterial({ color: a.peligroso ? 0xFF0000 : 0x00FF00 });
+    astOrbitLine = new THREE.Line(geometry, material);
+    scene.add(astOrbitLine);
+    
+    astOrbitLabel = createTextLabel("Órbita Asteroide");
+    astOrbitLabel.position.copy(points[Math.floor(points.length * 0.25)]);
+    astOrbitLabel.position.y += 0.5; scene.add(astOrbitLabel);
+    
+    asteroid = new THREE.Mesh(new THREE.SphereGeometry(0.08, 32, 32), new THREE.MeshStandardMaterial({ map: asteroidTexture, roughness: 0.9, metalness: 0.1 }));
+    astNameLabel = createTextLabel(a.nombre);
+    astNameLabel.position.y = 0.5; asteroid.add(astNameLabel); scene.add(asteroid);
+    
+    let minDistance = Infinity, closestApproachTime = 0;
+    const earthElements = { a: 1, e: 0.0167, i: 0, raan: 0, omega: 102.9, M: 0 };
+    for (let time = 0; time < 360; time++) {
+        const earthPos = orbitalToHeliocentric(earthElements, time);
+        const periodRatio = Math.sqrt(Math.pow(a.elements.a, 3));
+        const ast_M = (time / periodRatio) % 360;
+        const astPos = orbitalToHeliocentric(a.elements, ast_M);
+        const distance = earthPos.distanceTo(astPos);
+        if (distance < minDistance) { minDistance = distance; closestApproachTime = time; }
+    }
+
+    isPaused = true; playPauseBtn.textContent = "Play";
+    simulationTime = closestApproachTime; slider.value = simulationTime;
+    updatePositions(simulationTime);
+}
+
+// --- CONTROLES DE SIMULACIÓN (sin cambios) ---
+playPauseBtn.addEventListener('click', () => { isPaused = !isPaused; if (!isPaused && simulationSpeed === 0) { simulationSpeed = 0.05; } playPauseBtn.textContent = isPaused ? "Play" : "Pause"; });
+rewindBtn.addEventListener('click', () => { simulationSpeed = -0.1; isPaused = false; playPauseBtn.textContent = "Pause"; });
+forwardBtn.addEventListener('click', () => { simulationSpeed = 0.2; isPaused = false; playPauseBtn.textContent = "Pause"; });
+slider.addEventListener('input', () => { simulationTime = parseFloat(slider.value); isPaused = true; playPauseBtn.textContent = "Play"; simulationSpeed = 0; updatePositions(simulationTime); });
+cameraToggleBtn.addEventListener('click', () => {
+    followEarth = !followEarth;
+    cameraToggleBtn.textContent = followEarth ? "Free Camera" : "Follow the Earth";
+    if (followEarth) { controls.target.copy(earth.position); }
+});
+
+// --- BUCLE Y ACTUALIZACIÓN DE POSICIONES (sin cambios) ---
+const earthElements = { a: 1, e: 0.0167, i: 0, raan: 0, omega: 102.9, M: 0 };
+const cameraOffset = new THREE.Vector3(0, 3, 7);
+function updatePositions(time) {
+    if (!currentAsteroid || !asteroid) return;
+    const earthPos = orbitalToHeliocentric(earthElements, time);
+    earth.position.copy(earthPos);
+    const periodRatio = Math.sqrt(Math.pow(currentAsteroid.elements.a, 3));
+    const ast_M = (time / periodRatio) % 360;
+    const astPos = orbitalToHeliocentric(currentAsteroid.elements, ast_M);
+    asteroid.position.copy(astPos);
+    proximityLine.geometry.setFromPoints([earthPos, astPos]);
+    const distanceKM = earthPos.distanceTo(astPos) / SCENE_SCALE_AU * KM_PER_AU;
+    const lunarDistances = distanceKM / LUNAR_DISTANCE_KM;
+    if (lunarDistances < 1) proximityLine.material.color.set(0xFF0000);
+    else if (lunarDistances < 5) proximityLine.material.color.set(0xFFA500);
+    else if (lunarDistances < 10) proximityLine.material.color.set(0xFFFF00);
+    else proximityLine.material.color.set(0xFFFFFF);
+    liveDistanceEl.textContent = `${new Intl.NumberFormat('es-MX').format(distanceKM.toFixed(0))} km (${lunarDistances.toFixed(2)} LD)`;
+}
+function animate() {
+    requestAnimationFrame(animate);
+    if (!isPaused) {
+        simulationTime += simulationSpeed;
+        if (simulationTime > 360) simulationTime = 0; if (simulationTime < 0) simulationTime = 360;
+        slider.value = simulationTime;
+        updatePositions(simulationTime);
+    }
+    earth.rotation.y += 0.01;
+    if (followEarth) { camera.position.copy(earth.position).add(cameraOffset); controls.target.copy(earth.position); }
+    controls.update();
+    renderer.render(scene, camera);
+}
+
+// --- FUNCIÓN DE INICIO ---
+function initializeSimulator() {
+    // Comprueba si se proporcionaron datos válidos
+    if (!asteroidData || !asteroidData.elements || asteroidData.elements.a === 0) {
+        document.getElementById('panel').innerHTML = `
+            <h3>Error</h3>
+            <div id="params" style="color: #ffc107;">No se proporcionaron datos orbitales válidos para la simulación.</div>
+            <a href="/" class="back-button">← Volver a la Búsqueda</a>`;
+        console.error("Datos del asteroide no válidos:", asteroidData);
+        return;
+    }
+    // Si los datos son válidos, inicia la simulación
+    initThree();
+    mostrarOrbita(asteroidData);
+    animate();
+}
+
+// Llama a la función de inicio
+initializeSimulator();
+
+</script>
+</body>
+</html>
