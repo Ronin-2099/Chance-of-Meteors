@@ -2,16 +2,56 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Asteroid Explorer</title>
-<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}"/>
-
+<title>Asteroid Monitoring System</title>
 <style>
       body {
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        background-color: #1a1a2e;
-        color: #e0e0e0;
+        background-color: #1e2b80;
+        color: #f0f0f0;
+        margin: 0;
+        line-height: 1.6;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
       }
-      .asteroid-form, .asteroid-info {
+      .header-gif {
+        background-image: url('/static/DRONE SHEESH.gif');
+        background-size: cover;
+        background-position: center;
+        height: 300px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        text-align: center;
+        color: #fff;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.7);
+      }
+      .header-gif h1 {
+        font-size: 2.5rem;
+        margin: 0;
+      }
+      main {
+        padding: 20px;
+        max-width: 900px;
+        margin: auto;
+        flex-grow: 1;
+      }
+      .intro-borrador {
+        background: #151d5c;
+        padding: 20px;
+        margin-bottom: 20px;
+        border-radius: 8px;
+        text-align: center;
+        color: white;
+      }
+      .seccion-borrador {
+        background: #151d5c;
+        padding: 30px;
+        border-radius: 10px;
+        box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+        text-align: center;
+      }
+      .asteroid-form {
         width: 90%;
         max-width: 1000px;
         margin: 20px auto;
@@ -19,20 +59,6 @@
         background-color: #2a2a4a;
         border-radius: 8px;
         box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-      }
-      .navigation-links {
-        text-align: center;
-        margin-bottom: 20px;
-        font-size: 1.2em;
-      }
-      .navigation-links a {
-        color: #00aaff;
-        text-decoration: none;
-        margin: 0 15px;
-        transition: color 0.3s;
-      }
-      .navigation-links a:hover {
-        color: #007bff;
       }
       .form-row {
         margin-bottom: 15px;
@@ -48,10 +74,25 @@
       button:hover {
         background-color: #0056b3;
       }
-      .error-message {
-        color: #ff4d4d;
-        text-align: center;
+      .enlace-boton {
+        background-color: #f0f0f0;
+        color: #1e2b80;
+        padding: 12px 25px;
+        text-decoration: none;
+        border-radius: 8px;
+        transition: background-color 0.3s, transform 0.3s;
         font-weight: bold;
+      }
+      .enlace-boton:hover {
+        background-color: #dcdcdc;
+        transform: translateY(-2px);
+      }
+      footer {
+        background: #0d123e;
+        text-align: center;
+        padding: 1rem 0;
+        margin-top: 40px;
+        position: relative;
       }
       .action-buttons {
           display: flex;
@@ -73,87 +114,123 @@
       .action-buttons a:hover {
           background-color: #007bff;
       }
+      .asteroid-info {
+        width: 90%;
+        max-width: 1000px;
+        margin: 20px auto;
+        padding: 20px;
+        background-color: #2a2a4a;
+        border-radius: 8px;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+        text-align: left; /* Alineamos el texto a la izquierda para mejor legibilidad */
+      }
+      .asteroid-info ul {
+        list-style-position: inside;
+        padding-left: 0;
+      }
+      .error-message {
+        color: #ff4d4d;
+        text-align: center;
+        font-weight: bold;
+      }
 </style>
 </head>
 <body>
-<h1>Asteroid Explorer 🔭</h1>
 
-<div class="navigation-links">
-    <a href="{{ url_for('list_asteroids') }}">Whole list of registered asteroids</a>
-</div>
+    <header class="header-gif">
+        <h1>Asteroid Monitoring System</h1>
+    </header>
 
-<form method="get" class="asteroid-form">
-    <div class="form-row">
-        <label for="asteroid_id">Asteroid's ID:</label>
-        <input type="text" id="asteroid_id" name="asteroid_id" required value="{{ request.args.get('asteroid_id','') }}">
-    </div>
-    <button type="submit">Load Data</button>
-</form>
+    <main>
+        <div class="intro-borrador">
+            <p>In this simulator, we used the data of the NASA Near-Earth Object (NEO) Web Service Application Programming Interface (API) to obtain the data of many asteroids or other objects that we can then simulate how the area of our choice is affected by any of those objects listed.</p>
+        </div>
 
-{% if error %}<p class="error-message">{{ error }}</p>{% endif %}
+        <div class="seccion-borrador">
+            <h1>Asteroid Explorer 🔭</h1>
+            <div class="navigation-links">
+                <a href="{{ url_for('list_asteroids') }}" class="enlace-boton">View Asteroid List</a>
+            </div>
+            
+            <form method="get" class="asteroid-form">
+                <div class="form-row">
+                    <label for="asteroid_id">Asteroid's ID:</label>
+                    <input type="text" id="asteroid_id" name="asteroid_id" required value="{{ request.args.get('asteroid_id', '') }}">
+                </div>
+                <button type="submit">Load Data</button>
+            </form>
 
-{% if asteroid_data %}
-<div class="asteroid-info">
-    <h2>{{ asteroid_data.name }} (ID: {{ asteroid_data.id }})</h2>
-    
-    {% if asteroid_data.is_potentially_hazardous_asteroid %}
-      <p style="color: #ffc107; text-align: center; font-weight: bold;">⚠️ This asteroid is potentially dangerous! ⚠️</p>
-    {% endif %}
+            {% if error %}<p class="error-message">{{ error }}</p>{% endif %}
 
-    <h4>Parameters for Orbit Calculation 🪐</h4>
-    <ul>
-        <li><b>Semi-Major Axis (a):</b> {{ asteroid_data.semi_major_axis }} AU</li>
-        <li><b>Eccentricity (e):</b> {{ asteroid_data.eccentricity }}</li>
-        <li><b>Inclination (i):</b> {{ asteroid_data.inclination }}°</li>
-        <li><b>Ascending Node Longitude (Ω):</b> {{ asteroid_data.ascending_node_longitude }}°</li>
-        <li><b>Argument of Perihelion (ω):</b> {{ asteroid_data.perihelion_argument }}°</li>
-        <li><b>Mean Anomaly (M):</b> {{ asteroid_data.mean_anomaly }}°</li>
-        <hr style="border-color: #4a4a6a; margin: 10px 0;">
-        <li><b>Orbital Period:</b> {{ asteroid_data.orbital_period }} days</li>
-        <li><b>Perihelion:</b> {{ asteroid_data.perihelion_distance }} AU (closest to Sun)</li>
-        <li><b>Aphelion:</b> {{ asteroid_data.aphelion_distance }} AU (farthest from Sun)</li>
-    </ul>
-    <hr>
-    <h4>Parameters for Impact and Consequences ☄️</h4>
-    <ul>
-        <li><b>Estimated Diameter:</b> between {{ asteroid_data.diameter_meters.min }} and {{ asteroid_data.diameter_meters.max }} meters</li>
-        <li><b>Date of Next Approach:</b> {{ asteroid_data.close_approach.date }}</li>
-        <li><b>Relative Approach Velocity:</b> {{ asteroid_data.close_approach.velocity_kps }} km/s</li>
-        <li><b>Miss Distance (minimum):</b> {{ "%.2f"|format(asteroid_data.close_approach.miss_distance_km) }} km</li>
-    </ul>
-    <hr>
-    
-    {% if deflection_data %}
-    <h4>Planetary Defense Mission Parameters 🛡️</h4>
-    <ul>
-        <li><b>Required Velocity Change (Δv):</b> {{ "%.4f"|format(deflection_data.required_dv_ms) }} m/s</li>
-        <li><b>Mission Goal:</b> Increase perihelion to >{{ deflection_data.target_perihelion_au }} AU.</li>
-        <li><b>Most Efficient Maneuver Point:</b> At the orbit's aphelion (farthest point from the Sun).</li>
-    </ul>
-    <hr>
-    {% endif %}
-    
-    <div class="action-buttons">
-        <a href="{{ url_for('mapa', 
-                      diameter=(asteroid_data.diameter_meters.min + asteroid_data.diameter_meters.max) / 2, 
-                      velocity=asteroid_data.close_approach.velocity_kps * 1000) }}">
-            Simulate Impact ☄️
-        </a>
-        
-        <a href="{{ url_for('sim', 
-                      name=asteroid_data.name,
-                      sma=asteroid_data.semi_major_axis,
-                      ecc=asteroid_data.eccentricity,
-                      inc=asteroid_data.inclination,
-                      raan=asteroid_data.ascending_node_longitude,
-                      omega=asteroid_data.perihelion_argument,
-                      m=asteroid_data.mean_anomaly,
-                      hazardous=asteroid_data.is_potentially_hazardous_asteroid) }}">
-            Visualize Orbit 🪐
-        </a>
-    </div>
-    </div>
-{% endif %}
+            {% if asteroid_data %}
+            <div class="asteroid-info">
+                <h2>{{ asteroid_data.name }} (ID: {{ asteroid_data.id }})</h2>
+                
+                {% if asteroid_data.is_potentially_hazardous_asteroid %}
+                  <p style="color: #ffc107; text-align: center; font-weight: bold;">⚠️ This asteroid is potentially dangerous! ⚠️</p>
+                {% endif %}
+            
+                <h4>Parameters for Orbit Calculation 🪐</h4>
+                <ul>
+                    <li><b>Semi-Major Axis (a):</b> {{ asteroid_data.semi_major_axis }} AU</li>
+                    <li><b>Eccentricity (e):</b> {{ asteroid_data.eccentricity }}</li>
+                    <li><b>Inclination (i):</b> {{ asteroid_data.inclination }}°</li>
+                    <li><b>Ascending Node Longitude (Ω):</b> {{ asteroid_data.ascending_node_longitude }}°</li>
+                    <li><b>Argument of Perihelion (ω):</b> {{ asteroid_data.perihelion_argument }}°</li>
+                    <li><b>Mean Anomaly (M):</b> {{ asteroid_data.mean_anomaly }}°</li>
+                    <hr style="border-color: #4a4a6a; margin: 10px 0;">
+                    <li><b>Orbital Period:</b> {{ "%.2f"|format(asteroid_data.orbital_period|float) }} days</li>
+                    <li><b>Perihelion:</b> {{ "%.3f"|format(asteroid_data.perihelion_distance|float) }} AU (closest to Sun)</li>
+                    <li><b>Aphelion:</b> {{ "%.3f"|format(asteroid_data.aphelion_distance|float) }} AU (farthest from Sun)</li>
+                </ul>
+                <hr>
+                <h4>Parameters for Impact and Consequences ☄️</h4>
+                <ul>
+                    <li><b>Estimated Diameter:</b> between {{ asteroid_data.diameter_meters.min }} and {{ asteroid_data.diameter_meters.max }} meters</li>
+                    <li><b>Date of Next Approach:</b> {{ asteroid_data.close_approach.date }}</li>
+                    <li><b>Relative Approach Velocity:</b> {{ "%.2f"|format(asteroid_data.close_approach.velocity_kps|float) }} km/s</li>
+                    <li><b>Miss Distance (minimum):</b> {{ "%.2f"|format(asteroid_data.close_approach.miss_distance_km|float) }} km</li>
+                </ul>
+                <hr>
+                
+                {% if deflection_data %}
+                <h4>Planetary Defense Mission Parameters 🛡️</h4>
+                <ul>
+                    <li><b>Required Velocity Change (Δv):</b> {{ "%.4f"|format(deflection_data.required_dv_ms) }} m/s</li>
+                    <li><b>Mission Goal:</b> Increase perihelion to >{{ deflection_data.target_perihelion_au }} AU.</li>
+                    <li><b>Most Efficient Maneuver Point:</b> At the orbit's aphelion (farthest point from the Sun).</li>
+                </ul>
+                <hr>
+                {% endif %}
+                
+                <div class="action-buttons">
+                    <a href="{{ url_for('mapa', 
+                                  diameter=(asteroid_data.diameter_meters.min + asteroid_data.diameter_meters.max) / 2, 
+                                  velocity=asteroid_data.close_approach.velocity_kps) }}">
+                        Simulate Impact ☄️
+                    </a>
+                    
+                    <a href="{{ url_for('sim', 
+                                  name=asteroid_data.name,
+                                  sma=asteroid_data.semi_major_axis,
+                                  ecc=asteroid_data.eccentricity,
+                                  inc=asteroid_data.inclination,
+                                  raan=asteroid_data.ascending_node_longitude,
+                                  omega=asteroid_data.perihelion_argument,
+                                  m=asteroid_data.mean_anomaly,
+                                  hazardous=asteroid_data.is_potentially_hazardous_asteroid) }}">
+                        Visualize Orbit 🪐
+                    </a>
+                </div>
+            </div>
+            {% endif %}
+
+        </div>
+    </main>
+
+    <footer>
+        <p>Los budis &copy; 2025</p>
+    </footer>
 
 </body>
 </html>

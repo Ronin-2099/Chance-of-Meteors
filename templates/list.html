@@ -4,87 +4,146 @@
     <meta charset="UTF-8">
     <title>List of objects near to Earth</title>
     <style>
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #1a1a2e;
-            color: #e0e0e0;
-            margin: 0;
-            padding: 20px;
-        }
-        .container {
-            width: 90%;
-            max-width: 1200px;
-            margin: 20px auto;
-            padding: 20px;
-            background-color: #2a2a4a;
-            border-radius: 8px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-        }
-        h1 {
-            text-align: center;
-            color: #00aaff;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 20px;
-        }
-        th, td {
-            padding: 12px 15px;
-            border: 1px solid #4a4a6a;
-            text-align: left;
-        }
-        th {
-            background-color: #3a3a5a;
-        }
-        .pha {
-            background-color: #6d2020;
-            color: #ffdddd;
-            font-weight: bold;
-        }
-        .pha td:first-child::before {
-            content: "⚠️ ";
-        }
-        a {
-            color: #00aaff;
-            text-decoration: none;
-        }
-        a:hover {
-            text-decoration: underline;
-        }
+      body {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        background-color: #1e2b80;
+        color: #f0f0f0;
+        margin: 0;
+        line-height: 1.6;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+      .header-gif {
+        background-image: url('/static/DRONE SHEESH.gif'); /* Asegúrate de tener esta imagen en tu proyecto */
+        background-size: cover;
+        background-position: center;
+        height: 300px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        text-align: center;
+        color: #fff;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.7);
+      }
+      .header-gif h1 {
+        font-size: 2.5rem;
+        margin: 0;
+      }
+      main {
+        padding: 20px;
+        max-width: 900px;
+        margin: auto;
+        flex-grow: 1;
+      }
+      .seccion-borrador {
+        background: #151d5c;
+        padding: 30px;
+        border-radius: 10px;
+        box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+        text-align: center;
+      }
+      .enlace-boton {
+        background-color: #f0f0f0;
+        color: #1e2b80;
+        padding: 12px 25px;
+        text-decoration: none;
+        border-radius: 8px;
+        transition: background-color 0.3s, transform 0.3s;
+        font-weight: bold;
+        display: inline-block; /* Añadido para mejor visualización */
+        margin-bottom: 20px; /* Añadido para espacio */
+      }
+      .enlace-boton:hover {
+        background-color: #dcdcdc;
+        transform: translateY(-2px);
+      }
+      footer {
+        background: #0d123e;
+        text-align: center;
+        padding: 1rem 0;
+        margin-top: 40px;
+        position: relative;
+      }
+      .asteroid-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 20px;
+        background-color: #2a2a4a;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+        border-radius: 8px;
+        overflow: hidden;
+      }
+      .asteroid-table th, .asteroid-table td {
+        padding: 12px 15px;
+        border: 1px solid #4a4a6a;
+        text-align: left;
+      }
+      .asteroid-table th {
+        background-color: #3a3a5a;
+      }
+      .asteroid-table .pha {
+        background-color: #6d2020;
+        color: #ffdddd;
+        font-weight: bold;
+      }
+      .asteroid-table .pha td:first-child::before {
+        content: "⚠️ ";
+      }
+      a {
+        color: #00aaff;
+        text-decoration: none;
+      }
+      a:hover {
+        text-decoration: underline;
+      }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>List of objects near to Earth (In the next 7 days)</h1>
-        <p><a href="/">&larr; Return to homepage</a></p>
-        
-        {% if error %}
-            <p style="color: red; text-align: center;">{{ error }}</p>
-        {% else %}
-        <table>
-            <thead>
-                <tr>
-                    <th>Object's ID:</th>
-                    <th>Name</th>
-                    <th>Estimated Diameter (m)</th>
-                    <th>Date of aproximmation</th> <th>Potentially Dangerous</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for asteroid in asteroids %}
-                    <tr class="{{ 'pha' if asteroid.is_potentially_hazardous_asteroid else '' }}">
-                        <td>
-                            <a href="/?asteroid_id={{ asteroid.id }}">{{ asteroid.id }}</a>
-                        </td>
-                        <td>{{ asteroid.name }}</td>
-                        <td>{{ asteroid.diameter_min }} - {{ asteroid.diameter_max }}</td>
-                        <td>{{ asteroid.approach_date }}</td> <td>{{ 'Sí' if asteroid.is_potentially_hazardous_asteroid else 'No' }}</td>
+
+    <header class="header-gif">
+        <h1>Asteroid List</h1>
+    </header>
+
+    <main>
+        <div class="seccion-borrador">
+            <h1 style="color: #00aaff; text-align: center;">List of objects near to Earth (In the next 7 days)</h1>
+            <p><a href="/" class="enlace-boton">&larr; Return to homepage</a></p>
+            
+            {% if error %}
+                <p style="color: red; text-align: center;">{{ error }}</p>
+            {% else %}
+            <table class="asteroid-table">
+                <thead>
+                    <tr>
+                        <th>Object's ID:</th>
+                        <th>Name</th>
+                        <th>Estimated Diameter (m)</th>
+                        <th>Date of aproximmation</th>
+                        <th>Potentially Dangerous</th>
                     </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        {% endif %}
-    </div>
+                </thead>
+                <tbody>
+                    {% for asteroid in asteroids %}
+                        <tr class="{{ 'pha' if asteroid.is_potentially_hazardous_asteroid else '' }}">
+                            <td>
+                                <a href="/?asteroid_id={{ asteroid.id }}">{{ asteroid.id }}</a>
+                            </td>
+                            <td>{{ asteroid.name }}</td>
+                            <td>{{ asteroid.diameter_min }} - {{ asteroid.diameter_max }}</td>
+                            <td>{{ asteroid.approach_date }}</td>
+                            <td>{{ 'Yes' if asteroid.is_potentially_hazardous_asteroid else 'No' }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+        </div>
+    </main>
+
+    <footer>
+        <p>Los budis &copy; 2025</p>
+    </footer>
+
 </body>
 </html>
